@@ -1,0 +1,11 @@
+import { chromium } from 'playwright-core';
+const browser = await chromium.launch({ headless: true });
+const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+await page.goto(process.env.BASE_URL || 'http://localhost:5175/', { waitUntil: 'networkidle' });
+await page.getByRole('button', { name: /^Refund a charge$/i }).click();
+await page.getByRole('button', { name: /Run — Protected by Notary/i }).click();
+await page.locator('.flash', { hasText: 'CONFIRMED' }).waitFor({ timeout: 30000 });
+await page.waitForTimeout(700);
+await page.screenshot({ path: '../artifacts/ui-7-refund-receipt.jpg', type: 'jpeg', quality: 82, fullPage: true });
+console.log('shot saved');
+await browser.close();

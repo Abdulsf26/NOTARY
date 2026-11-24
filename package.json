@@ -1,0 +1,44 @@
+{
+  "name": "notary",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "oxlint",
+    "preview": "vite preview",
+    "smoke": "node scripts/smoke.mjs",
+    "train": "node scripts/train.mjs",
+    "calibrate": "node scripts/calibrate.mjs",
+    "test": "node --test test/",
+    "serve": "node server/notary-server.mjs",
+    "example:mcp": "node examples/mcp-flow.mjs",
+    "example:openai": "node examples/chatgpt-flow.mjs",
+    "ui-check": "node scripts/ui-check.mjs",
+    "eval": "node scripts/eval.mjs"
+  },
+  "dependencies": {
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "oxlint": "^1.90.0",
+    "playwright-core": "^1.65.1",
+    "vite": "^8.3.6"
+  },
+  "description": "Notary \u2014 the transaction layer for AI actions. Pre-flight cost certificate + verified, hash-chained receipt for every MCP tool call.",
+  "keywords": [
+    "mcp",
+    "agents",
+    "llm",
+    "ai-safety",
+    "audit",
+    "tool-use",
+    "whackest"
+  ],
+  "license": "MIT"
+}

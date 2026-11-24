@@ -1,0 +1,70 @@
+openapi: 3.1.0
+info:
+  title: Notary — compile + verify facade
+  version: 0.1.0
+  description: |
+    The transaction layer for AI actions. POST a natural-language task; get back the
+    compiled, certified MCP/tool surface. Audit receipt chains at /v1/verify.
+    Wire this into a ChatGPT Custom GPT (Actions) or any HTTP client.
+servers:
+  - url: http://127.0.0.1:8787
+    description: local sidecar (must be reachable from your client; expose deliberately)
+paths:
+  /healthz:
+    get:
+      operationId: healthz
+      responses:
+        '200': { description: service + registry info }
+  /v1/compile:
+    post:
+      operationId: compileSurface
+      summary: Compile a task into a certified tool surface
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query]
+              properties:
+                query: { type: string, maxLength: 2000, description: "Natural-language task, e.g. ‘Post the Q3 update to #engineering and log it on the Acme deal’" }
+                budget: { type: number, minimum: 0, maximum: 100000, default: 900, description: "Hard token budget B for the injected tool surface" }
+                lambda: { type: number, minimum: 0, maximum: 100, default: 0.5, description: "Redundancy price λ (monotonicity-clamped server-side)" }
+      responses:
+        '200':
+          description: Certified surface
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  surface: { type: array, items: { type: object } }
+                  certificate: { type: object, description: "bound, calibratedBound, estimateMedian, guarantee — guarantee attaches to `bound` (Bonferroni @ α=0.05)" }
+                  decision: { type: object, description: "λ used, seeds explored, F vs greedy gain" }
+        '422': { description: invalid input }
+  /v1/openai-tools:
+    get:
+      operationId: getOpenAITools
+      summary: Compiled surface as chat-completions `tools:` array
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string, maxLength: 2000 } }
+        - { name: budget, in: query, schema: { type: number, default: 900 } }
+        - { name: lambda, in: query, schema: { type: number, default: 0.5 } }
+      responses:
+        '200':
+          description: { tools, certificate, surface } ready for chat.completions.create({ tools })
+  /v1/verify:
+    post:
+      operationId: verifyChain
+      summary: Verify a Notary receipt hash-chain
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [receipts]
+              properties:
+                receipts: { type: array, maxItems: 100 }
+      responses:
+        '200': { description: { valid, problems, checked } }

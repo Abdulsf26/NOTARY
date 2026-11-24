@@ -1,0 +1,65 @@
+{"q": "Find the Q3 update in Drive, post the summary to the engineering Slack channel, append it to the Q3 Notion page, and log it on the Acme deal", "pos": ["drive.search_files", "notion.read_page", "notion.append_block", "slack.post_in_channel", "crm.log_activity"]}
+{"q": "Summarize the Q3 board deck and send it to the leadership Gmail list", "pos": ["drive.search_files", "gmail.send_email"]}
+{"q": "Post the release notes in #general and pin it in the engineering channel", "pos": ["slack.post_in_channel", "slack.set_topic"]}
+{"q": "Search Slack for the incident discussion from yesterday", "pos": ["slack.search_messages"]}
+{"q": "Upload the new brand assets to the #design channel", "pos": ["slack.upload_file"]}
+{"q": "Set the channel topic to 'deploy freeze until Monday'", "pos": ["slack.set_topic"]}
+{"q": "Add a :white_check_mark: reaction to the launch announcement", "pos": ["slack.add_reaction"]}
+{"q": "List all channels in the workspace", "pos": ["slack.list_channels"]}
+{"q": "Reply to the thread about the pricing page with the updated numbers", "pos": ["slack.post_in_thread"]}
+{"q": "Create a Notion page for the 2026 offsite agenda in the team wiki", "pos": ["notion.create_page"]}
+{"q": "Find the onboarding checklist page in Notion", "pos": ["notion.search_pages"]}
+{"q": "Update the title of the launch retro page in Notion", "pos": ["notion.update_page"]}
+{"q": "Query the Notion tasks database for everything assigned to me this week", "pos": ["notion.query_database"]}
+{"q": "Create a Notion database to track design partner onboarding", "pos": ["notion.create_database"]}
+{"q": "File a bug in Jira for the login timeout and assign it to the infra team", "pos": ["jira.create_issue"]}
+{"q": "Move ENG-231 to Done in Jira", "pos": ["jira.transition_issue"]}
+{"q": "Search Jira for open bugs in the payments component", "pos": ["jira.search_issues"]}
+{"q": "Add a comment to ENG-118 noting the rollback is complete", "pos": ["jira.add_comment"]}
+{"q": "Update the Jira ticket ENG-240 with the reproduction steps", "pos": ["jira.update_issue"]}
+{"q": "List the Jira projects I have access to", "pos": ["jira.list_projects"]}
+{"q": "Open a GitHub issue for the flaky certificate test", "pos": ["github.create_issue"]}
+{"q": "Create a pull request from feature/notary-audit into main", "pos": ["github.create_pull_request"]}
+{"q": "Search the repository for usages of verifyEffect", "pos": ["github.search_code"]}
+{"q": "Cut a v0.2.0 release on GitHub with the changelog", "pos": ["github.create_release"]}
+{"q": "Find the signed MSA PDF in Drive and update it with the new entity", "pos": ["drive.search_files", "drive.update_file"]}
+{"q": "Create a folder structure for the Acme engagement in Drive", "pos": ["drive.create_file"]}
+{"q": "Share the pricing sheet with the Acme account team", "pos": ["drive.share_file"]}
+{"q": "List everything in the vendor contracts folder", "pos": ["drive.list_folder"]}
+{"q": "Read the content of the architecture doc in Drive", "pos": ["drive.read_file"]}
+{"q": "Find a 30-minute slot next week for the architecture review", "pos": ["calendar.find_free_slot"]}
+{"q": "Create a calendar event for the design partner demo on Friday", "pos": ["calendar.create_event"]}
+{"q": "Reschedule the standup to 15 minutes later", "pos": ["calendar.update_event"]}
+{"q": "Cancel tomorrow's 1:1", "pos": ["calendar.delete_event"]}
+{"q": "Send the investor update email to the fundraising list", "pos": ["gmail.send_email"]}
+{"q": "Search my inbox for the offer letter from Anthropic", "pos": ["gmail.search_inbox"]}
+{"q": "Draft a reply to the procurement email with the redlines", "pos": ["gmail.draft_reply"]}
+{"q": "Send the launch announcement to all design partners", "pos": ["gmail.send_bulk_email"]}
+{"q": "Check what I sent the Acme deal last week", "pos": ["gmail.list_sent"]}
+{"q": "Log a call on the Acme deal noting the pricing objection", "pos": ["crm.log_activity"]}
+{"q": "Move the Acme deal to negotiation stage", "pos": ["crm.update_deal_stage"]}
+{"q": "Find the contact at Globex who owns procurement", "pos": ["crm.search_contacts"]}
+{"q": "Create a contact for the new champion at Initech", "pos": ["crm.create_contact"]}
+{"q": "Create an invoice for Acme for the March services", "pos": ["stripe.create_invoice"]}
+{"q": "Refund charge ch_381 for the duplicate subscription", "pos": ["stripe.create_refund"]}
+{"q": "List recent Stripe charges over $10k", "pos": ["stripe.list_charges"]}
+{"q": "Send a reminder for the overdue invoice INV-2041", "pos": ["stripe.send_invoice_reminder"]}
+{"q": "Select last week's signups from the users table", "pos": ["postgres.run_select"]}
+{"q": "Describe the schema of the orders table", "pos": ["postgres.describe_table"]}
+{"q": "Run the nightly revenue rollup query on Snowflake", "pos": ["snowflake.run_query"]}
+{"q": "Create a Linear issue for the flaky E2E suite", "pos": ["linear.create_issue"]}
+{"q": "What's the weather in Chennai this weekend", "pos": ["weather.get_forecast"]}
+{"q": "What is NVDA trading at right now", "pos": ["stocks.get_quote"]}
+{"q": "Geocode the Acme HQ address for the field visit", "pos": ["maps.geocode"]}
+{"q": "Get driving directions from the office to the client site", "pos": ["maps.directions"]}
+{"q": "Translate this SMS to Tamil for the Chennai pilot cohort", "pos": ["translate.translate_text"]}
+{"q": "Generate a hero image of a notary stamp for the launch post", "pos": ["image.generate_image"]}
+{"q": "Send a 2FA SMS to the on-call phone", "pos": ["sms.send_sms"]}
+{"q": "Schedule a Zoom with the Acme team for contract review", "pos": ["zoom.create_meeting"]}
+{"q": "Create an Asana task for the legal review of the DPA", "pos": ["asana.create_task"]}
+{"q": "Page the on-call engineer for elevated error rates", "pos": ["pagerduty.create_incident"]}
+{"q": "Create a Salesforce lead for the inbound webinar signup", "pos": ["salesforce.create_lead"]}
+{"q": "Send the MSA for signature via DocuSign", "pos": ["docusign.send_envelope"]}
+{"q": "Upload the signed certificate to Dropbox", "pos": ["dropbox.upload_file"]}
+{"q": "Publish the postmortem to the Confluence space", "pos": ["confluence.create_page"]}
+{"q": "Read the incident runbook from Confluence", "pos": ["confluence.get_page"]}

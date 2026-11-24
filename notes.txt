@@ -1,0 +1,117 @@
+NOTARY — ENGINEERING RESEARCH NOTES (distilled 2026-11-24)
+Purpose: every load-bearing formula/algorithm in the system, where it comes from, why, and how it is applied. Keep this file alive; the next agent extends it.
+Sources are primary papers / first-party engineering write-ups; each entry ends with the Notary hook.
+
+═══════════════════════════════════════════════════════════════════════
+1. SUBMODULAR / BUDGETED SUBMODULAR MAXIMIZATION (the compiler's core)
+   Problem:  max  F(S) = Σ_{t∈S} r(t|q) − λ·Σ_{i<j} σ(tᵢ,tⱼ)   s.t.  Σ_{t∈S} d(t) ≤ B
+   F is submodular (diminishing returns). Notary = budgeted submodular maximization (BSM) with a non-negative modular part and a submodular redundancy cost.
+
+   Guarantees, in the order proved:
+   (a) Cost-benefit greedy alone: F ≥ (1 − 1/√e)·OPT − o(1) ≈ 0.393·OPT  (Khuller–Moss–Naor, budgeted max-coverage; Krause–Guestrin 2005 generalize to general monotone submodular f, with the SAME constant).
+       Source: A. Krause, C. Guestrin — "A Note on the Budgeted Maximization of Submodular Functions" (Stanford CS224W reading PDF) http://snap.stanford.edu/class/cs224w-readings/krause05note.pdf
+   (b) Enumerate all subsets of ≤ 3 elements as seeds + run greedy from each: F ≥ (1 − 1/e)·OPT ≈ 0.632·OPT  (Sviridenko 2004, Operations Research Letters 32(1):41–43). THIS is why Notary enumerates 3-element seeds.
+   (c) Greedy is NP-hard to do better than (1 − 1/e) for monotone submodular (Feige 1998). Inapproximability ⇒ our guarantee is the best poly-time constant possible. Nemhauser–Wolsey–Fisher 1978: (1 − 1/e) for cardinality constraint.
+   (d) Practical implementation: naive enumeration is O(n^5); Feldman–Svensson–Zemel (2020/2021, "Practical Budgeted Submodular Maximization", arXiv:2007.04937) show 2-guess seeds suffice for the SAME (1−1/e) at ~O(n^3), and 1-guess yields ≥ 0.6174 ≈ 0.977·(1−1/e) at ~O(n^2).
+       Notary uses 3-guess per Sviridenko with a shortlist of top-14 relevance candidates → 469 seeds, sub-10 ms at n=86 (measured 6.1 ms). n ≤ 600 ⇒ still interactive.
+   (e) δ-threshold variant ("maximum coverage with threshold"): stop when best gain < δ. Preserves the approximation structure; kills budget-padding. Notary ships δ = 0.05 as a parameter (compileSurface(..., { delta })).
+   λ_max monotonicity clamp: F monotone iff ∀t: r(t|q) ≥ λ·Σ_{t′} σ(t,t′). Clamp λ ≤ min_t r/Σσ over the candidate pool (r ≥ 0.15) — pool-restricted because Σσ grows linearly with registry size and the over-all-tools bound degenerates to 0. Enforced automatically; documented in README/ARCHITECTURE.
+
+   NOTARY HOOK: src/core/selector.js (incremental-penalty greedy, typed arrays, r/cost branch-and-bound). Validated: enumeration F ≥ greedy F on every compile (test asserts it).
+
+═══════════════════════════════════════════════════════════════════════
+2. MMR — MAXIMAL MARGINAL RELEVANCE (what our objective is, stated classically)
+   Carbonell & Goldstein, SIGIR 1998:  MMR = argmax_i [ λ·Rel(q,dᵢ) − (1−λ)·max_{dⱼ∈S} Sim(dᵢ,dⱼ) ].
+   Notary's objective IS MMR-with-knapsack (relevance − λ·redundancy, budgeted, greedy + enumeration).
+   Source: https://www.researchgate.net/publication/2269571
+   Consequence: redundancy σ(t,t′) is the design lever — measured as calibrated Jaccard over name+desc+params Jaccard×1.6, with hand-calibrated overrides for known near-duplicates (CALIBRATED_SIGMA in registry.js). This is exactly the FAISS/BM25-style "near-duplicate suppression" pattern done with set algebra.
+   NOTARY HOOK: src/core/similarity.js (redundancy), src/core/selector.js (objective).
+
+═══════════════════════════════════════════════════════════════════════
+3. CONFORMAL PREDICTION — the certificate's statistical spine
+   Split (inductive) conformal: distribution-free, finite-sample coverage.
+     1. Split data into train/calibration.
+     2. Nonconformity score s_i (ours: actual_total ÷ predicted stochastic component).
+     3. q̂ = Quantile({s_i}; ⌈(m+1)(1−α)⌉/m)   ← the ⌈(n+1)(1−α)⌉/n correction is mandatory; skipping it undercovers.
+     4. New point: prediction = q̂-expanded set; P(Y_new ∈ C(X_new)) ≥ 1 − α EXACTLY in finite samples (under exchangeability).
+   Sources: Angelopoulos & Bates, "A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification", arXiv:2107.07511 — https://people.eecs.berkeley.edu/~angelopoulos/publications/downloads/gentle_intro_conformal_dfuq.pdf
+   Our Bonferroni bound plays the same mathematical role with NO data: C = Σd(t) + Σ Q̂_t(1 − α/|S|) is a union bound over per-tool quantiles ⇒ P(actual > C) ≤ α. Conformal ADDS an empirical tightening layer: per-surface-size inflation factors fitted on 40k seeded synthetic episodes, verified on a held-out half (npm run calibrate). n=1 Bonferroni is ~exact (5.44% measured vs 5% target); n≥2 Bonferroni is conservative (≤1.6%) and conformal tightens to ~5%.
+   Conformal Risk Control (CRC, Angelopoulos et al. ICLR 2024) — extends conformal to CONTROL E[L] for monotone losses: pick λ̂ s.t. E[L(λ̂)] ≤ α.
+     https://proceedings.iclr.cc/paper_files/paper/2024/file/f3549ef9b5ff520a7e41ff3cc306ab2b-Paper-Conference.pdf
+     Notary application (roadmap-grade): use CRC to certify the RETRY policy — choose retry budget r̂ so that E[false-success rate | r̂] ≤ α on calibration logs, giving a distribution-free bound on FSR rather than a heuristic. This is the right theorem to cite when judges ask "how do you KNOW retries drive FSR to 0?".
+   Honest scope: calibration under the fitted lognormal model (DISPERSION 0.85); swap in production telemetry → same code path (npm run calibrate). Documented in EVALUATION.md — we ship the harness, not a fabricated guarantee.
+
+═══════════════════════════════════════════════════════════════════════
+4. EVIDENCE BASE — why context tax and selection collapse are real (judge-proof citations)
+   a) Anthropic, "Introducing advanced tool use" (Nov 24 2025): 5 MCP servers / 58 tools ≈ 55,000 tokens of tool definitions before the user speaks; Opus 4 selection 49%→74% and Opus 4.5 79.5%→88.1% with Tool Search; ~85% token saving reported. (via https://iotdigitaltwinplm.com/ai-agent-tool-retrieval-dynamic-tool-loading-tool-rag-context-budget-mcp-2026/ and Anthropic's article)
+   b) Gan & Sun, "RAG-MCP: Mitigating Prompt Bloat in LLM Tool Selection via Retrieval-Augmented Generation", arXiv:2505.03275 (May 2025): tool-selection accuracy 13.62% → 43.13%, >50% prompt-token cut on MCPBench (web-search subset). https://arxiv.org/abs/2505.03275
+   c) LiveMCPBench (arXiv:2508.01780, Feb 2026): 70 servers, 527 tools, 95 real tasks, 12 frontier models — "tool retrieval remains the primary bottleneck"; Completeness Error 33.3%, Hallucinated Completion 46.2% (paper's LLM-judge taxonomy). Ten thousand+ MCP servers exist. https://arxiv.org/html/2508.01780
+   d) Validity audit of tool-calling evals (arXiv:2607.02577, Jun 2026): LiveMCPBench LLM-judge scores vary 57.9–76.8% across 23 reruns (σ≈5.4pp); BFCL v4 AST-matching 20% evaluator-human misalignment. IMPLICATION: do not claim absolute accuracy — claim RELATIVE comparisons on a fixed task set, and claim the MECHANISM (compile + certify + verify), never "our agent is 88% accurate".
+   e) LongFuncEval (2025): 7–85% tool-calling performance drop as tool count grows. Retrieval repairs ≤ 23% of selection failures (dossier's citation of "Looking Is Not Picking", arXiv 2606.16364).
+   NOTARY HOOK: README/PITCH use (a)–(d); ARCHITECTURE §validation limits claim scope accordingly. EVALUATION.md holds our own measured numbers — we never outrun our evidence.
+
+═══════════════════════════════════════════════════════════════════════
+5. 200 OK IS NOT SUCCESS — the verifier's evidence
+   Field telemetry (LangFuse/Arize/Galileo, per agoradigest): frontier models hit 93–97% single-step accuracy on well-written schemas, but multi-step completion < 50% before retries; silent failures are schema-valid, semantically empty, 200-OK responses — HTTP 200 with no state change is invisible to status-code monitoring (alert on ratio > 2% in sliding window).
+     https://agoradigest.com/q/d6701cc5-bd88-4ea0-8225-39f480b7dbdb/v/1
+   Silent failure taxonomy (4 profiles, all HTTP 200): empty_valid / null_field / malformed / truncated — arXiv:2607.19449 "Guardrails as Scapegoats".
+   Production mitigations (convergent across sources): post-execution state verification (hash/snapshot), semantic validation of args (rule-based, not just types), per-task token budgets + retry caps (2–3) + circuit breaker → human review, full payload logging with '200 OK ∧ ¬state-change' ratio alerts.
+   NOTARY HOOK: src/core/verifier.js (per-tool read-backs, CONTRADICTED → ≤2 retries → human; vacuous read-backs upgraded to real state checks in world.js — refund/invoice/comment/PR/release/linear/page/database all verified against the mock world's stored state), world.js fault injection = FIRST write swallowed, ANY tool, HTTP-200-shaped (the exact silent no-op class, generalised 2026-11-24), receipts hash-chain = the audit artifact these pipelines lack; idempotency keys (src/core/idempotency.js; SHA-256 of stableStringify({task,tool,params}); confirmed writes replay from a localStorage-backed ledger — exactly-once across sessions; CONTRADICTED keys are released for bounded retry); per-tool FSR posterior (src/core/fsr.js; Beta(1,1) + Wilson 95% + 14-day half-life decay, 200-event cap) = the measurable version of "alert above 2%". FSR table is embedded in every receipt (hash-covered).
+
+═══════════════════════════════════════════════════════════════════════
+6. SUPPORTING MATH & PHYSICS (applied, not decorative)
+   - Submodularity / diminishing returns ⇒ greedy near-optimality (Section 1). Feige 1998 threshold — our honesty line.
+   - MMR formulation (Section 2). 
+   - Union bound (Bonferroni): P(∪ Aᵢ) ≤ Σ P(Aᵢ) — free, no independence needed; cost: conservatism at large |S| ⇒ motivates per-size conformal (Section 3).
+   - Normal quantile: Acklam's rational approximation (normInv in certificate.js) — |err| < 1.15e-9, no table lookups, O(1).
+   - Lognormal model for token returns: heavy right tail; median = p95 · e^{−z95·σ}, z95 = Φ⁻¹(0.95) = 1.6449, σ = 0.85 (DISPERSION). Right tail ↑ ⇒ CIs wide — hence estimateMedian + calibratedBound shown NEXT to the guarantee, never instead of it.
+   - Beta posterior for FSR ( conjugate for Bernoulli): prior Beta(1,1); after n calls with f silent failures: posterior mean = (f+1)/(n+2); Wilson 95% score interval = (p̂ + z²/2n ± z√(p̂(1−p̂)/n + z²/4n²)) / (1+z²/n), z = 1.96. Never reports 0 as certain from zero failures (Laplace smoothing). NOTARY HOOK: src/core/fsr.js, Ledger table.
+   - Exponential decay prior (half-life): each tool's FSR events carry timestamps; effective counts decay by 0.5^(Δt/14d) at read-out (src/core/fsr.js: decayedCounts) — tools that lie recently weigh more than tools that lied a month ago. Nightly recompute from a production receipt log remains the deployment-time version.
+   - Little's law L = λW — capacity sanity: at 500 req/min with p95 verifier overhead 50 ms, in-flight verification ≤ ~0.42 ⇒ verifier adds no queueing at realistic throughput. Use in ARCHITECTURE for the "overhead < 500 ms p95" metric story.
+   - Hash chain (integrity): receipt_i commits to H(payload_i) and prev = H(receipt_{i−1}); SHA-256 collision resistance ⇒ tamper-evidence. Merkle-tree batching for 10k+ receipts: verify O(log n) via root + proofs (roadmap; current verifyChain is O(n) streaming, fine at MVP scale).
+   - False-failure retry analysis: if each attempt fails independently with prob p, k retries ⇒ residual failure p^k. At p = 3% (field silent-failure rate) and k = 2 ⇒ 9e-4 ≈ 1 in 1,111 — the quantitative spine of "FSR → 0 by construction" (under independence caveat; correlation handled by idempotency keys + read-back target re-resolution, not by blind retry).
+
+═══════════════════════════════════════════════════════════════════════
+7. DATA TYPES & EFFICIENCY (how the 6.1 ms compile happens)
+   - Per-query memoisation (tokenize→tf-idf vec→answerable set): queryParts Map — collapses O(|V|·tokenize(q)) to O(tokenize(q)).
+   - σ precomputed ONCE per registry as symmetric Float32Array (n² = 7,396 floats for n=86), WeakMap-cached by array identity — enumeration inner loop is an array read, not a string-keyed Map.
+   - Greedy with incremental penalties: penalty[t] = λΣ_{s∈S}σ(t,s) updated in O(|V|) per accepted tool instead of O(|V|·|S|); typed-array rArr/rOverCost/costArr; branch-and-bound: skip candidate if r/cost ≤ current best density (since m ≤ r).
+   - Certificate: O(|S|) normInv calls; no allocation-heavy sort on the hot path.
+   - Planner (src/core/planner.js): pure functions, O(rules·|V|) — intent regexes matched against the query; steps resolved ONLY against the compiled surface (fail-closed with a PLANNER note); reads staged before writes; cross-step composition in a second pass (resolveDeferred) — params are computed, never typed in. Deterministic ⇒ same query + world ⇒ same trajectory.
+   - Idempotency: key = SHA-256(stableStringify({task,tool,params})).slice(0,24); begin/confirm/release; replay renders as REPLAY ✓ entries. In-flight duplicate dispatch refused.
+   - Logger (src/core/logger.js / server/logger.mjs): one entry shape {ts, level, service, msg, ...}; browser ring buffer (250, window.__notary_log.entries()); Node facade appends logs/facade.jsonl with 1 MB rotation via logs/…; never logs bodies.
+   - Complexity cheatsheet: compile O(|V|²) worst (enumeration adds small constant), relevance O(|V|·|q|), planner O(rules·|V|), receipt seal O(n) (SHA-256 streaming), chain verify O(n), FSR table O(Σ|calls|), idempotency O(1)/call.
+   - Benchmarks: cold ≈ 46 ms (one-time σ matrix), warm ≈ 6.1 ms (300-run mean) — scripts/bench.mjs.
+
+═══════════════════════════════════════════════════════════════════════
+8. OPEN PROBLEMS / HONEST LIMITS
+   - DISPERSION is global; per-class calibration needed once telemetry exists.
+   - CALIBRATED_SIGMA hand-tuned (12 pairs); learn from co-occurrence logs.
+   - Planner in the demo is deterministic (no LLM in the loop) but non-trivial: ~18 intent families, reads-before-writes staging, cross-step composition, per-intent parameter extraction (channel/charge/issue/ticker), fail-closed surface gating, example chips as UI affordances. Arbitrary language still needs an LLM planner (docs/INTEGRATION.md shows the seam) — and the LLM plan is NOT the safety story: the gate/verify/receipt layers don't care who proposed the calls. Notary ≠ planner: it authorises, certifies and verifies — it does not "understand".
+   - Over-broad intents were tightened once already (2026-11-24): "Refund charge ch_123 for the Acme invoice" must not create an invoice or log a deal note — intents now require their verb (`create…invoice`) and crm triggers moved from bare /acme/ to /deal-object/. Regression locked in test/planner-fsr.test.mjs. Keyword planners WILL over-fire — every rule must earn its regex.
+   - Conformal coverage assumes exchangeability — drift breaks it; weighted conformal (Tibshirani et al. 2019) is the fix on the roadmap.
+   - Idempotency keys dedup writes only if the upstream honours them (our mock does; real SaaS mostly does — verify per connector).
+
+═══════════════════════════════════════════════════════════════════════
+9. SOURCES (primary)
+   Sviridenko 2004 · Krause–Guestrin 2005 (snap.stanford.edu/class/cs224w-readings/krause05note.pdf) · Khuller–Moss–Naor 1999 · Feige 1998 · Nemhauser–Wolsey–Fisher 1978 · Feldman–Svensson–Zemel arXiv:2007.04937 (Practical BSM) · Carbonell–Goldstein SIGIR 1998 (MMR) · Angelopoulos–Bates arXiv:2107.07511 (conformal intro) · Angelopoulos et al. ICLR 2024 (CRC) · Tibshirani et al. 2019 (weighted conformal) · Gan–Sun arXiv:2505.03275 (RAG-MCP) · LiveMCPBench arXiv:2508.01780 · LongFuncEval 2025 · arXiv:2607.02577 (benchmark validity audit) · arXiv:2607.19449 (silent-failure taxonomy) · Anthropic "Introducing advanced tool use" (Nov 2025) · BFCL v4 · Looking Is Not Picking arXiv 2606.16364 · AgentPMT (context-tax measurements, Feb 2026) · Perplexity migration disclosure · Cloudflare 244k-token catalog analysis · MCP spec 2025-2026 editions (tools/list, annotations as untrusted hints) · Speakeasy/Albato/Lunar.dev (selection-accuracy vs catalog size).
+   Verify every external number before quoting it publicly; numbers rot.
+
+═══════════════════════════════════════════════════════════════════════
+10. 2026-11-24 — EVIDENCE ADDENDUM (this turn, all measured on gold.jsonl)
+   (a) BM25F (field-weighted) REJECTED: holdout nDCG@5 72.2 vs classic 87.9, S0∈{4,5,6}
+       identical — WANDS +7.4% did not transfer to 86 short tool docs. Kept in tree,
+       never wired. (src/core/bm25.js; scripts/eval.mjs)
+   (b) Exact-oracle optimality: branch-and-bound over r>0 pool vs compileSurface:
+       mean F/F* = 99.86% over 65 gold queries; min 98.3%. The (1-1/e) theorem is a
+       floor; on this registry the compiler is effectively optimal at B=900, λ=0.5.
+   (c) Learned LR + 3 features (idfCoverage, charCos, bigramCoverage): single-split
+       holdout 92.3 nDCG5 / 92.4 MRR; 5-fold CV shows only +0.8 (89.4±5.3 vs 88.6±5.2)
+       — feature gain kept, claimed modestly. cv-features.mjs is the harness.
+   (d) Selection recall on held-out test: classic 100% @ ~6.4 tools/query — the
+       decisive ship/no-ship metric; learned matches on test but misses on train (96.6%).
+   (e) Latency re-measured ~9 ms warm (was 6.8 ms) after extended features; classic
+       path avoids paying for learned-only features (baseFeatures split).
+   (f) Attribution: Struse/Robertson BM25F; Robertson PRMS; Sviridenko 2004;
+       Feldman-Svensson-Zemel arXiv:2007.04937 (2-guess SM); CONFORMAL: Angelopoulos-
+       Bates arXiv:2107.07511; ICLR 2024 Conformal Risk Control.

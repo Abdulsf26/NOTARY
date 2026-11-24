@@ -1,0 +1,12 @@
+import { chromium } from 'playwright-core';
+const b = await chromium.launch({ headless: true });
+const p = await b.newPage({ viewport: { width: 2050, height: 1350 } });
+const fails = [];
+p.on('requestfailed', r => fails.push(r.url().slice(0, 80)));
+p.on('pageerror', e => console.log('pageerror:', e.message));
+await p.goto('file:///home/user/notary/artifacts/architecture.html', { waitUntil: 'networkidle', timeout: 90000 });
+await p.waitForSelector('.mxgraph svg, .mxgraph canvas, .mxgraph iframe, .mxgraph img', { timeout: 30000 }).catch(() => console.log('no diagram selector found'));
+await p.waitForTimeout(3500);
+await p.screenshot({ path: '/home/user/notary/artifacts/architecture.png', fullPage: true });
+console.log('fails:', fails);
+await b.close();
